@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::mem::take;
-use std::fmt;
 
 // #![feature(generic_const_exprs)] The generic_const_exprs feature is unstable, so use a const
 // instead
@@ -11,8 +10,8 @@ pub(super) const B: usize = 3;
 #[derive(Default)]
 pub(super) struct Node<K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     pub(super) keys: [K; B * 2],
     pub(super) values: [V; B * 2],
@@ -32,8 +31,8 @@ where
 
 pub(super) enum InsertResult<K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     NodeSplit(Node<K, V>),
     KeyExist(V),
@@ -49,8 +48,8 @@ enum IndexResult
 
 impl <K, V> Node<K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     pub(super) fn new() -> Self {
         Default::default()
@@ -86,7 +85,6 @@ where
         match &self.find_key_index(&key) {
             IndexResult::Found(pos) => {
                 let old_v = take(&mut self.values[*pos]);
-                println!("Add key {:?} : values {:?} at pos {}", &key, &value, *pos);
                 self.values[*pos] = value;
                 return InsertResult::KeyExist(old_v);
             },
@@ -109,9 +107,10 @@ where
             return self.split(InsertResult::KeyNotExist());
         };
 
-        let child = (*self.children[pos].as_ref().unwrap()).clone();
+        let ret;
+        { let child = (*self.children[pos].as_ref().unwrap()).clone();
         let mut child = child.borrow_mut();
-        let ret = match child.add_recursive(key, value) {
+        ret = match child.add_recursive(key, value) {
             InsertResult::KeyNotExist() => InsertResult::KeyNotExist(),
             InsertResult::KeyExist(v) => InsertResult::KeyExist(v) ,
             InsertResult::NodeSplit(mut w) => {
@@ -121,9 +120,9 @@ where
                 // child
                 let (x_k, x_v) = w.remove(B - 1);
                 self.insert(x_k, x_v);
-                self.add_child(pos, w);
+                self.add_child(Some(Rc::new(RefCell::new(w))), pos);
                 InsertResult::KeyNotExist()                    },
-        };
+        }; }
         return self.split(ret);
     }
 
@@ -131,7 +130,6 @@ where
     pub(super) fn remove(&mut self, pos: usize) -> (K, V)
     {
         // Use take/replace/swap to manipulate field behind mutable borrow
-        println!("Remove existing key {:?} at pos {}", &self.keys[pos], &pos);
         let ret = (take(&mut self.keys[pos]), take(&mut self.values[pos]));
         for i in pos..self.length as usize - 1 {
             // let (left, right) = self.keys.split_array_mut::<{i}>(); // is unstable
@@ -191,15 +189,17 @@ where
         None
     }
 
+    #[allow(unused_assignments)]
     fn remove_smallest(&mut self) -> (K, V)
     {
         if self.is_leaf() {
             return self.remove(0);
         }
 
-        let child = (*self.children[0].as_ref().unwrap()).clone();
+        let mut ret = Default::default();
+        { let child = (*self.children[0].as_ref().unwrap()).clone();
         let mut child = child.borrow_mut();
-        let ret = child.remove_smallest();
+        ret = child.remove_smallest(); }
         self.check_child_underflow(0);
         return ret;
     }
@@ -288,6 +288,9 @@ where
         let (p_k, p_v) = self.remove(child_idx - 1);
         self.insert(e_k, e_v);
         child.insert(p_k, p_v);
+        // Move the last child of left_sibling as the first child of the right node
+        let l_child = left_sibling.remove_child(last + 1);
+        child.add_child(l_child, 0);
     }
 
     fn borrow_from_right(&mut self, child_idx: usize, mut child: RefMut<Node<K, V>>, mut right_sibling: RefMut<Node<K, V>>)
@@ -296,6 +299,10 @@ where
         let (p_k, p_v) = self.remove(child_idx);
         self.insert(e_k, e_v);
         child.insert(p_k, p_v);
+        // Move the first child of right_sibling as the last child of left node
+        let r_child = right_sibling.remove_child(0);
+        let last = child.length as usize;
+        child.add_child(r_child, last);
     }
 
     fn is_leaf(&self) -> bool
@@ -323,8 +330,6 @@ where
         // Last element of a non-leaf node is allowed to have empty right child
         new_child.children[B] = None;
 
-        println!("Split node {:p}, now a new node {:p}", &self, &new_child);
-
         for i in 0..B {
             self.keys[i] = take(&mut self.keys[i + B]);
             self.values[i] = take(&mut self.values[i + B]);
@@ -335,14 +340,24 @@ where
         InsertResult::NodeSplit(new_child)
     }
 
-    fn add_child(&mut self, pos: usize, new_child: Node<K, V>)
+    // This is always called after insert()
+    fn add_child(&mut self, new_child: Option<Rc<RefCell<Node<K, V>>>>, pos: usize)
     {
-        // TODO: use length instead of children.len()?
-        for i in (pos..self.children.len() - 1).rev() {
+        for i in (pos..self.length as usize).rev() {
             let left_child = take(&mut self.children[i]);
             self.children[i + 1] = left_child;
         }
-        self.children[pos] = Some(Rc::new(RefCell::new(new_child)));
+        self.children[pos] = new_child;
+    }
+
+    // This is always called after remove()
+    fn remove_child(&mut self, pos: usize) -> Option<Rc<RefCell<Node<K, V>>>>
+    {
+        let ret = take(&mut self.children[pos]);
+        for i in pos..self.length as usize + 1 {
+            self.children[i] = take(&mut self.children[i + 1]);
+        }
+        ret
     }
 
     // Insert operation allows to increase node's total elements to 2B: will then
@@ -355,40 +370,35 @@ where
             match key.cmp(self.keys[pos].borrow()) {
                 Ordering::Greater => {
                     if pos == self.length as usize {
-                        self.keys[pos] = key;
-                        self.values[pos] = value;
+                        self.insert_at(key, value, pos);
                         break;
                     }
                 },
                 Ordering::Equal => {
-                    assert_eq!(self.length, 0);
-                    self.keys[pos] = key;
-                    self.values[pos] = value;
-                    break;
+                    if pos == self.length as usize { // This happens only when key equals to default
+                        self.insert_at(key, value, pos);
+                        break;
+                    }
                 },
                 Ordering::Less => {
-                    println!("Try add key {:?} at pos {} with existing key {:?}", &key, &pos, &self.keys[pos]);
-                    // TODO: use length instead of keys.len()?
-                    for i in (pos..self.length as usize).rev() {
-                        let left_k = take(&mut self.keys[i]);
-                        let left_v = take(&mut self.values[i]);
-                        println!("Move existing key {:?} at pos {} to pos {}", &left_k, &i, &i + 1);
-                        self.keys[i + 1] = left_k;
-                        self.values[i + 1] = left_v;
-                    }
-                    println!("Add key {:?} at pos {}", &key, &pos);
-                    self.keys[pos] = key;
-                    self.values[pos] = value;
+                    self.insert_at(key, value, pos);
                     break;
                 },
             }
         }
         self.length += 1;
-        print!("After insert [ ");
-        for i in 0..self.length as usize {
-            print!("{:#?}, ", &self.keys[i]);
+    }
+
+    fn insert_at(&mut self, key: K, value: V, pos: usize)
+    {
+        for i in (pos..self.length as usize).rev() {
+            let left_k = take(&mut self.keys[i]);
+            let left_v = take(&mut self.values[i]);
+            self.keys[i + 1] = left_k;
+            self.values[i + 1] = left_v;
         }
-        println!("] ");
+        self.keys[pos] = key;
+        self.values[pos] = value;
     }
 
     fn find_key_index<'a, Q: ?Sized>(&'a self, key: &Q) -> IndexResult

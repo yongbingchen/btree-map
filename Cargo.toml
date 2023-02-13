@@ -13,4 +13,9 @@ path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Only need crate rand for tests, run test with "cargo test --features stress_test"
 [dependencies]
+rand = { version = "0.8.5", optional = true}
+
+[features]
+stress_test = ["dep:rand"]

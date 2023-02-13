@@ -9,7 +9,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
-use std::fmt;
 
 mod btree_node;
 use btree_node::{Node, SearchResult, InsertResult, B};
@@ -97,8 +96,8 @@ use btree_iter::{Iter, IterMut};
 #[derive(Default)]
 pub struct BTreeMap<K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     // Why not use exclusive Box? Because the node (and the value inside it) need to be borrowed
     // for iteration
@@ -108,9 +107,10 @@ where
 
 impl <K, V> BTreeMap<K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
+    #[allow(missing_docs)]
     pub fn new() -> Self {
         Default::default()
     }
@@ -359,7 +359,7 @@ where
 /// By implement IntoIterator, you define how a struct will be converted to an iterator.
 /// This is required for the "for (key, value) in &mut map {} ", which is the idiomatic way
 /// to use a mut iter.
-impl<'a, K: Default + Ord + fmt::Debug, V: Default + fmt::Debug> IntoIterator for &'a mut BTreeMap<K, V> {
+impl<'a, K: Default + Ord, V: Default> IntoIterator for &'a mut BTreeMap<K, V> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = IterMut<'a, K, V>;
 
@@ -372,8 +372,8 @@ impl<'a, K: Default + Ord + fmt::Debug, V: Default + fmt::Debug> IntoIterator fo
 mod tests {
     use super::*;
 
-    fn check_btree_correctness(map: &BTreeMap::<i32, String>, expected_keys: Vec<Vec<Vec<i32>>>) {
-        let mut result: Vec<Vec<Vec<(i32, String)>>> = Default::default();
+    fn check_btree_correctness(map: &BTreeMap::<u32, String>, expected_keys: Vec<Vec<Vec<u32>>>) {
+        let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
 
         for i in 0..result.len() {
@@ -388,8 +388,8 @@ mod tests {
         }
     }
 
-    fn print_btree(map: &BTreeMap::<i32, String>) {
-        let mut result: Vec<Vec<Vec<(i32, String)>>> = Default::default();
+    fn print_btree(map: &BTreeMap::<u32, String>) {
+        let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
         for i in 0..result.len() {
             println!("At layer {}", &i);
@@ -405,14 +405,34 @@ mod tests {
         }
     }
 
+    fn check_btree_sanity(map: &BTreeMap::<u32, String>) -> Vec<u32> {
+        let mut ret = Vec::<u32>::new();
+        let mut prev_k = None;
+        for (k, v) in map.iter() {
+            assert!(v == &(&(k + 1)).to_string());
+            if prev_k.is_none() {
+                prev_k = Some(k);
+            } else {
+                if *prev_k.unwrap() >= *k {
+                    println!("prev {}, curr {}", *prev_k.unwrap(), *k);
+                    print_btree(&map);
+                }
+                assert!(*prev_k.unwrap() < *k);
+                prev_k = Some(k);
+            }
+            ret.push(*k);
+        };
+        ret
+    }
+
     #[test]
     fn algorithm_coverage_tests() {
         println!("Please manually change B in src/lib/btree_node.rs to 3 before this algorithm_coverage_tests");
-        let mut map = BTreeMap::<i32, String>::new();
+        let mut map = BTreeMap::<u32, String>::new();
 
         for j in 0..B * 2 {
             for i in 0..10 {
-                map.insert((i * (B * 2 - 1) + j) as i32, (i * (B * 2 - 1) + j + 1).to_string());
+                map.insert((i * (B * 2 - 1) + j) as u32, (i * (B * 2 - 1) + j + 1).to_string());
             }
         }
 
@@ -500,11 +520,11 @@ mod tests {
 
     #[test]
     fn iter_tests() {
-        let mut map = BTreeMap::<i32, String>::new();
+        let mut map = BTreeMap::<u32, String>::new();
 
         for j in 0..B * 2 {
             for i in 0..10 {
-                map.insert((i * (B * 2 - 1) + j) as i32, (i * (B * 2 - 1) + j + 1).to_string());
+                map.insert((i * (B * 2 - 1) + j) as u32, (i * (B * 2 - 1) + j + 1).to_string());
             }
         }
 
@@ -522,5 +542,63 @@ mod tests {
         }
 
         assert_eq!(size, 51);
+    }
+
+    #[test]
+    // Run test with "cargo test --features stress_test" to enable this stress test case
+    #[cfg(feature = "stress_test")]
+    fn stress_test() {
+        // Use fixed pseudo sequnce for repeatable testing
+        use rand::{Rng, SeedableRng};
+        use rand::rngs::StdRng;
+        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        let mut rng = StdRng::from_seed(seed);
+
+        let mut max_elements:usize = 0;
+        for i in 0..7 {
+            max_elements += (2 * B).pow(i) * (2 * B + 1);
+        }
+        println!("Try 7 layer B-Tree with maximum elements {}", max_elements);
+
+        let mut map = BTreeMap::<u32, String>::new();
+        let mut total_elements = 0;
+        while total_elements < max_elements / 40 {
+            let key = rng.gen::<u32>();
+            if map.get(&key).is_none() && key != 0 {
+                map.insert(key, (key + 1).to_string());
+                total_elements += 1;
+                check_btree_sanity(&map);
+                if key % 4 == 0 {
+                    let erase = rng.gen::<u32>();
+                    if map.get(&erase).is_some() {
+                        let v = map.remove(&erase);
+                        assert!(*v.unwrap() == (erase + 1).to_string());
+                        check_btree_sanity(&map);
+                        total_elements -= 1;
+                    }
+                }
+            }
+        }
+        println!("Filled the B-Tree with {} elements", total_elements);
+
+        print_btree(&map);
+        let mut preorder = check_btree_sanity(&map);
+
+        // Try delete all element, in a pseudo random manner
+        while preorder.len() != 0 {
+            let i = rng.gen::<usize>() % preorder.len();
+            let k = preorder.remove(i);
+            let e = map.get(&k);
+            assert!(*e.unwrap() == (k + 1).to_string());
+            let v = map.remove(&k);
+            let now = check_btree_sanity(&map);
+            assert!(*v.unwrap() == (k + 1).to_string());
+            total_elements -= 1;
+        }
+
+        preorder = check_btree_sanity(&map);
+        assert!(preorder.len() == 0);
+        assert!(total_elements == 0);
+        println!("Stress test done!");
     }
 }

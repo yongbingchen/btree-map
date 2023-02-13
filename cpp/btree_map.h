@@ -144,6 +144,14 @@ struct Node {
     children[index] = std::move(child);
   }
 
+  std::unique_ptr<Node> remove_child(const size_t index) {
+      auto ret = std::move(children[index]);
+      for (auto i = index; i < 2 * B; i++) {
+          children[i] = std::move(children[i + 1]);
+      }
+      return ret;
+  }
+
   // Remove the element at index, return the key/value pair of this element
   Element<K, V> remove(const size_t index) {
     Element<K, V> e{std::move(keys[index]), std::move(values[index])};
@@ -435,6 +443,10 @@ class BTreeMap {
     auto p = parent->remove(child_idx);
     parent->insert(std::move(e.first), std::move(e.second));
     child->insert(std::move(p.first), std::move(p.second));
+    // Move the first child of right_sibling as the last child of left node
+    auto r_child = right_sibling->remove_child(0);
+    auto last = child->size();
+    child->add_child(std::move(r_child), last);
   }
 
   void borrow_from_left(
@@ -442,10 +454,14 @@ class BTreeMap {
       const size_t child_idx,
       std::unique_ptr<btree_map_private::Node<K, V, B>>& child,
       std::unique_ptr<btree_map_private::Node<K, V, B>>& left_sibling) {
-    auto e = left_sibling->remove(left_sibling->size() - 1);
+    auto last = left_sibling->size() - 1;
+    auto e = left_sibling->remove(last);
     auto p = parent->remove(child_idx - 1);
     parent->insert(std::move(e.first), std::move(e.second));
     child->insert(std::move(p.first), std::move(p.second));
+    // Move the last child of left_sibling as the first child of the right node
+    auto l_child = left_sibling->remove_child(last + 1);
+    child->add_child(std::move(l_child), 0);
   }
 
   // Merge right_child to its left sibling, and let parent->children[child_idx]

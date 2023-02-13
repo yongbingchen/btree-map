@@ -180,9 +180,8 @@ static void algorithm_coverage_tests() {
   std::cout << "Algorithm test done!" << std::endl;
 }
 
-static const size_t B_STRESS = 32;
 static void check_btree_sanity(
-    btree_map::BTreeMap<int, std::string, B_STRESS> const& map) {
+    btree_map::BTreeMap<int, std::string, B_FACTOR> const& map) {
   std::vector<btree_map::Element<int, std::string>> preorder;
   map.preorder(preorder);
   for (auto i = 0; i < preorder.size() - 1 && preorder.size() != 0; i++) {
@@ -190,31 +189,49 @@ static void check_btree_sanity(
   }
 }
 
+static int my_pow(size_t x, unsigned int p) {
+    if (p == 0) return 1;
+    if (p == 1) return x;
+
+    int tmp = my_pow(x, p/2);
+    if (p % 2 == 0) {
+        return tmp * tmp;
+    }
+    else {
+        return x * tmp * tmp;
+    }
+}
+
 static void stress_tests() {
   // Max capacity for a 3 layer B-Tree with B factor set to 32 is 262,143
-  const size_t MAX_ELEMENTS =
-      (1 + 2 * B_STRESS + (2 * B_STRESS) * (2 * B_STRESS)) * (2 * B_STRESS - 1);
-  auto map = btree_map::BTreeMap<int, std::string, B_STRESS>{};
+  size_t max_elements = 0;
+  for (auto i = 0; i < 7; i++) {
+      max_elements += my_pow(2 * B_FACTOR, i) * (2 * B_FACTOR + 1);
+  }
+
+  std::cout << "stress_tests max_elements " << max_elements << std::endl;
+  auto map = btree_map::BTreeMap<int, std::string, B_FACTOR>{};
 
   size_t total_elements = 0;
   // Try fill the tree, in a pseudo random manner
-  while (total_elements < MAX_ELEMENTS / 40) {
-    auto key = rand() % MAX_ELEMENTS;
+  while (total_elements < max_elements / 40) {
+    auto key = rand() % max_elements;
     if (std::nullopt == map.find(key)) {
       map.insert(key, std::to_string(key + 1));
       total_elements++;
       check_btree_sanity(map);
       if (key % 4 == 0) {  // Mix insert with erase
-        auto erase = rand() % MAX_ELEMENTS;
+        auto erase = rand() % max_elements;
         if (std::nullopt != map.find(erase)) {
           auto v = map.erase(erase);
           assert(v != std::nullopt && *(v->get()) == std::to_string(erase + 1));
+          check_btree_sanity(map);
           total_elements--;
         }
       }
     }
   }
-  display<B_STRESS>(map);
+  display<B_FACTOR>(map);
   check_btree_sanity(map);
 
   // Try delete all element, in a pseudo random manner

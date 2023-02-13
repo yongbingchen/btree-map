@@ -1,20 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::marker::PhantomData;
-use std::fmt;
 use crate::btree_node::{Node, B};
-
-/// An immutable reference to a key-value pair
-struct Element<'a, K, V> {
-    key: &'a K,
-    value: &'a V,
-}
-
-/// A reference to a key-value pair, while value is mutable
-struct ElementMut<'a, K, V> {
-    key: &'a K,
-    value: &'a mut V,
-}
 
 /// An iterator over the entries of a [`BTreeMap`].
 ///
@@ -25,8 +12,8 @@ struct ElementMut<'a, K, V> {
 #[derive(Default)]
 pub struct Iter<'a, K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     pub(super) current: Option<Rc<RefCell<Node<K, V>>>>,
     // The index of current key/value pair in current node
@@ -40,8 +27,8 @@ where
 
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V>
 where
-    K: Ord + Sized + Default + fmt::Debug,
-	V: Sized + Default + fmt::Debug,
+    K: Ord + Sized + Default,
+	V: Sized + Default,
 {
     type Item = (&'a K, &'a V);
 
@@ -98,14 +85,26 @@ where
 ///
 /// [`iter_mut`]: BTreeMap::iter_mut
 #[derive(Default)]
-pub struct IterMut<'a, K, V> {
-    children: &'a [ElementMut<'a, K, V>],
-    parent: Option<Box<IterMut<'a, K, V>>>,
-    child_idx: usize,
-    length: usize,
+pub struct IterMut<'a, K, V>
+where
+    K: Ord + Sized + Default,
+	V: Sized + Default,
+{
+    pub(super) current: Option<Rc<RefCell<Node<K, V>>>>,
+    // The index of current key/value pair in current node
+    pub(super) current_idx: usize,
+    pub(super) parent: Option<Box<Iter<'a, K, V>>>,
+    // The index of current node in its parent's children array
+    pub(super) parent_idx: usize,
+    pub(super) return_from_child: [bool; B * 2 + 1],
+    pub(super) marker: PhantomData<&'a V>,
 }
 
-impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+impl<'a, K, V> Iterator for IterMut<'a, K, V>
+where
+    K: Ord + Sized + Default + 'a,
+	V: Sized + Default + 'a,
+{
     type Item = (&'a K, &'a mut V);
 
     fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
