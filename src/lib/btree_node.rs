@@ -6,7 +6,10 @@ use std::mem::take;
 
 // #![feature(generic_const_exprs)] The generic_const_exprs feature is unstable, so use a const
 // instead
+#[cfg(feature = "sanity_test")]
 pub(super) const B: usize = 3;
+#[cfg(not(feature = "sanity_test"))]
+pub(super) const B: usize = 6;
 #[derive(Default)]
 pub(super) struct Node<K, V>
 where

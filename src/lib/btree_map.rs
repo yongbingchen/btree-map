@@ -413,10 +413,6 @@ mod tests {
             if prev_k.is_none() {
                 prev_k = Some(k);
             } else {
-                if *prev_k.unwrap() >= *k {
-                    println!("prev {}, curr {}", *prev_k.unwrap(), *k);
-                    print_btree(&map);
-                }
                 assert!(*prev_k.unwrap() < *k);
                 prev_k = Some(k);
             }
@@ -426,8 +422,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sanity_test")]
     fn algorithm_coverage_tests() {
         println!("Please manually change B in src/lib/btree_node.rs to 3 before this algorithm_coverage_tests");
+        assert_eq!(B, 3);
         let mut map = BTreeMap::<u32, String>::new();
 
         for j in 0..B * 2 {
@@ -519,6 +517,7 @@ mod tests {
 
 
     #[test]
+    #[cfg(feature = "sanity_test")]
     fn iter_tests() {
         let mut map = BTreeMap::<u32, String>::new();
 
@@ -555,10 +554,10 @@ mod tests {
         let mut rng = StdRng::from_seed(seed);
 
         let mut max_elements:usize = 0;
-        for i in 0..7 {
+        for i in 0..6 {
             max_elements += (2 * B).pow(i) * (2 * B + 1);
         }
-        println!("Try 7 layer B-Tree with maximum elements {}", max_elements);
+        println!("Try 6 layer B-Tree with maximum elements {}", max_elements);
 
         let mut map = BTreeMap::<u32, String>::new();
         let mut total_elements = 0;
@@ -600,5 +599,116 @@ mod tests {
         assert!(preorder.len() == 0);
         assert!(total_elements == 0);
         println!("Stress test done!");
+    }
+
+
+    #[cfg(feature = "stress_test")]
+    fn benchmark_test() {
+        // Use fixed pseudo sequnce for repeatable testing
+        use rand::{Rng, SeedableRng};
+        use rand::rngs::StdRng;
+        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        let mut rng = StdRng::from_seed(seed);
+
+        let mut max_elements:usize = 0;
+        for i in 0..7 {
+            max_elements += (2 * B).pow(i) * (2 * B + 1);
+        }
+
+        let mut map = BTreeMap::<u32, String>::new();
+        let mut total_elements = 0;
+        while total_elements < max_elements / 40 {
+            let key = rng.gen::<u32>();
+            if map.get(&key).is_none() && key != 0 {
+                map.insert(key, (key + 1).to_string());
+                total_elements += 1;
+                if key % 4 == 0 {
+                    let erase = rng.gen::<u32>();
+                    if map.get(&erase).is_some() {
+                        let v = map.remove(&erase);
+                        total_elements -= 1;
+                    }
+                }
+            }
+        }
+
+        let mut preorder = check_btree_sanity(&map);
+        while preorder.len() != 0 {
+            let i = rng.gen::<usize>() % preorder.len();
+            let k = preorder.remove(i);
+            let e = map.get(&k);
+            let v = map.remove(&k);
+            total_elements -= 1;
+        }
+    }
+
+    fn std_check_btree_sanity(map: &std::collections::BTreeMap::<u32, String>) -> Vec<u32> {
+        let mut ret = Vec::<u32>::new();
+        let mut prev_k = None;
+        for (k, v) in map.iter() {
+            assert!(v == &(&(k + 1)).to_string());
+            if prev_k.is_none() {
+                prev_k = Some(k);
+            } else {
+                assert!(*prev_k.unwrap() < *k);
+                prev_k = Some(k);
+            }
+            ret.push(*k);
+        };
+        ret
+    }
+
+    #[cfg(feature = "stress_test")]
+    fn std_benchmark() {
+        use std::collections::BTreeMap;
+        // Use fixed pseudo sequnce for repeatable testing
+        use rand::{Rng, SeedableRng};
+        use rand::rngs::StdRng;
+        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        let mut rng = StdRng::from_seed(seed);
+
+        let mut max_elements:usize = 0;
+        for i in 0..7 {
+            max_elements += (2 * B).pow(i) * (2 * B + 1);
+        }
+
+        let mut map = BTreeMap::<u32, String>::new();
+        let mut total_elements = 0;
+        while total_elements < max_elements / 40 {
+            let key = rng.gen::<u32>();
+            if map.get(&key).is_none() && key != 0 {
+                map.insert(key, (key + 1).to_string());
+                total_elements += 1;
+                if key % 4 == 0 {
+                    let erase = rng.gen::<u32>();
+                    if map.get(&erase).is_some() {
+                        let v = map.remove(&erase);
+                        total_elements -= 1;
+                    }
+                }
+            }
+        }
+
+        let mut preorder = std_check_btree_sanity(&map);
+        while preorder.len() != 0 {
+            let i = rng.gen::<usize>() % preorder.len();
+            let k = preorder.remove(i);
+            let e = map.get(&k);
+            let v = map.remove(&k);
+            total_elements -= 1;
+        }
+    }
+
+
+    #[test]
+    #[cfg(feature = "stress_test")]
+    fn benchmark() {
+        use std::time::Instant;
+        let this_impl = Instant::now();
+        benchmark_test();
+        println!("Elapsed time for this B-Tree Map implementation: {:.2?}", this_impl.elapsed());
+        let std = Instant::now();
+        std_benchmark();
+        println!("Elapsed time for the std B-Tree Map implementation: {:.2?}", std.elapsed());
     }
 }
