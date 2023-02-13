@@ -1,7 +1,7 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::marker::PhantomData;
 use crate::btree_node::{Node, B};
+use std::cell::RefCell;
+use std::marker::PhantomData;
+use std::rc::Rc;
 
 /// An iterator over the entries of a [`BTreeMap`].
 ///
@@ -13,7 +13,7 @@ use crate::btree_node::{Node, B};
 pub struct Iter<'a, K, V>
 where
     K: Ord + Sized + Default,
-	V: Sized + Default,
+    V: Sized + Default,
 {
     pub(super) current: Option<Rc<RefCell<Node<K, V>>>>,
     // The index of current key/value pair in current node
@@ -28,7 +28,7 @@ where
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V>
 where
     K: Ord + Sized + Default,
-	V: Sized + Default,
+    V: Sized + Default,
 {
     type Item = (&'a K, &'a V);
 
@@ -55,13 +55,12 @@ where
             return self.next();
         } else {
             if current_idx < node.length as usize {
-                let (item_k, item_v ) = (&node.keys[current_idx], &node.values[current_idx]);
+                let (item_k, item_v) = (&node.keys[current_idx], &node.values[current_idx]);
                 let item_k = unsafe { &*(item_k as *const K as *const K) };
                 let item_v = unsafe { &*(item_v as *const V as *const V) };
                 self.current_idx += 1;
                 return Some((item_k, item_v));
-            }
-            else {
+            } else {
                 // If current node is done, try its parent
                 match self.parent.take() {
                     Some(mut parent) => {
@@ -88,7 +87,7 @@ where
 pub struct IterMut<'a, K, V>
 where
     K: Ord + Sized + Default,
-	V: Sized + Default,
+    V: Sized + Default,
 {
     pub(super) current: Option<Rc<RefCell<Node<K, V>>>>,
     // The index of current key/value pair in current node
@@ -103,7 +102,7 @@ where
 impl<'a, K, V> Iterator for IterMut<'a, K, V>
 where
     K: Ord + Sized + Default + 'a,
-	V: Sized + Default + 'a,
+    V: Sized + Default + 'a,
 {
     type Item = (&'a K, &'a mut V);
 

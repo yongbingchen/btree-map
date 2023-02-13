@@ -4,9 +4,9 @@ fn main() {
     let mut movie_reviews = BTreeMap::<&str, &str>::new();
 
     // review some movies.
-    movie_reviews.insert("Office Space",       "Deals with real issues in the workplace.");
-    movie_reviews.insert("Pulp Fiction",       "Masterpiece.");
-    movie_reviews.insert("The Godfather",      "Very enjoyable.");
+    movie_reviews.insert("Office Space", "Deals with real issues in the workplace.");
+    movie_reviews.insert("Pulp Fiction", "Masterpiece.");
+    movie_reviews.insert("The Godfather", "Very enjoyable.");
     movie_reviews.insert("The Blues Brothers", "Eye lyked it a lot.");
 
     // check for a specific one.
@@ -27,7 +27,7 @@ fn main() {
     for movie in &to_find {
         match movie_reviews.get(movie) {
             Some(review) => println!("{movie}: {review}"),
-            None => println!("{movie} is unreviewed.")
+            None => println!("{movie} is unreviewed."),
         }
     }
 
@@ -43,5 +43,8 @@ fn main() {
     }
 
     let (first_movie, first_review) = movie_reviews.iter().next().unwrap();
-    assert_eq!((*first_movie, *first_review), ("Office Space", "Deals with real issues in the workplace."));
+    assert_eq!(
+        (*first_movie, *first_review),
+        ("Office Space", "Deals with real issues in the workplace.")
+    );
 }

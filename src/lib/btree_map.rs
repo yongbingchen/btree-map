@@ -5,13 +5,13 @@
 
 #![warn(missing_docs)]
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 mod btree_node;
-use btree_node::{Node, SearchResult, InsertResult, B};
+use btree_node::{InsertResult, Node, SearchResult, B};
 
 mod btree_iter;
 use btree_iter::{Iter, IterMut};
@@ -97,7 +97,7 @@ use btree_iter::{Iter, IterMut};
 pub struct BTreeMap<K, V>
 where
     K: Ord + Sized + Default,
-	V: Sized + Default,
+    V: Sized + Default,
 {
     // Why not use exclusive Box? Because the node (and the value inside it) need to be borrowed
     // for iteration
@@ -105,10 +105,10 @@ where
     length: usize,
 }
 
-impl <K, V> BTreeMap<K, V>
+impl<K, V> BTreeMap<K, V>
 where
     K: Ord + Sized + Default,
-	V: Sized + Default,
+    V: Sized + Default,
 {
     #[allow(missing_docs)]
     pub fn new() -> Self {
@@ -142,16 +142,21 @@ where
             let result = root.search(key);
             match result {
                 SearchResult::NotFound => return None,
-                SearchResult::Found(index) => return {
-                    let ret = &root.values[index];
-                    // SAFETY: return a reference to something locally borrowed is not possible under
-                    // Rust borrow-checker rule, even though I know that the returned reference must have satisfied
-                    // the lifetime parameter in the function signature, that it lives as long as the tree itself.
-                    // In this case, use unsafe to take the responsibilities to uphold Rust's safety guarantees myself.
-                    // See https://users.rust-lang.org/t/how-to-return-reference-to-value-in-rc-or-refcell/76729/18
-                    // for more detailed explaination.
-                    Some(unsafe { &*(ret as *const V as *const V) }) },
-                SearchResult::GoDown(value_ref) => return Some( unsafe { &*(value_ref as *const V as *const V) }),
+                SearchResult::Found(index) => {
+                    return {
+                        let ret = &root.values[index];
+                        // SAFETY: return a reference to something locally borrowed is not possible under
+                        // Rust borrow-checker rule, even though I know that the returned reference must have satisfied
+                        // the lifetime parameter in the function signature, that it lives as long as the tree itself.
+                        // In this case, use unsafe to take the responsibilities to uphold Rust's safety guarantees myself.
+                        // See https://users.rust-lang.org/t/how-to-return-reference-to-value-in-rc-or-refcell/76729/18
+                        // for more detailed explaination.
+                        Some(unsafe { &*(ret as *const V as *const V) })
+                    }
+                }
+                SearchResult::GoDown(value_ref) => {
+                    return Some(unsafe { &*(value_ref as *const V as *const V) })
+                }
             };
         }
         None
@@ -234,7 +239,7 @@ where
                 new_root.length = 1;
                 self.root = Some(Rc::new(RefCell::new(new_root)));
                 None
-            },
+            }
         };
 
         self.length += 1;
@@ -348,7 +353,6 @@ where
         K: Clone,
         V: Clone,
     {
-
         if self.root.as_ref().is_none() {
             return;
         }
@@ -372,7 +376,7 @@ impl<'a, K: Default + Ord, V: Default> IntoIterator for &'a mut BTreeMap<K, V> {
 mod tests {
     use super::*;
 
-    fn check_btree_correctness(map: &BTreeMap::<u32, String>, expected_keys: Vec<Vec<Vec<u32>>>) {
+    fn check_btree_correctness(map: &BTreeMap<u32, String>, expected_keys: Vec<Vec<Vec<u32>>>) {
         let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
 
@@ -388,7 +392,7 @@ mod tests {
         }
     }
 
-    fn print_btree(map: &BTreeMap::<u32, String>) {
+    fn print_btree(map: &BTreeMap<u32, String>) {
         let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
         for i in 0..result.len() {
@@ -405,7 +409,7 @@ mod tests {
         }
     }
 
-    fn check_btree_sanity(map: &BTreeMap::<u32, String>) -> Vec<u32> {
+    fn check_btree_sanity(map: &BTreeMap<u32, String>) -> Vec<u32> {
         let mut ret = Vec::<u32>::new();
         let mut prev_k = None;
         for (k, v) in map.iter() {
@@ -417,7 +421,7 @@ mod tests {
                 prev_k = Some(k);
             }
             ret.push(*k);
-        };
+        }
         ret
     }
 
@@ -430,16 +434,33 @@ mod tests {
 
         for j in 0..B * 2 {
             for i in 0..10 {
-                map.insert((i * (B * 2 - 1) + j) as u32, (i * (B * 2 - 1) + j + 1).to_string());
+                map.insert(
+                    (i * (B * 2 - 1) + j) as u32,
+                    (i * (B * 2 - 1) + j + 1).to_string(),
+                );
             }
         }
 
         print_btree(&map);
 
-        let expected_keys  = vec![
-            vec![ vec![15, 31], ],
-            vec![ vec![2, 5, 10], vec![18, 21, 25], vec![35, 40, 43, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![16, 17], vec![19, 20], vec![22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38, 39], vec![41, 42], vec![44, 45], vec![47, 48, 49, 50], ],
+        let expected_keys = vec![
+            vec![vec![15, 31]],
+            vec![vec![2, 5, 10], vec![18, 21, 25], vec![35, 40, 43, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![16, 17],
+                vec![19, 20],
+                vec![22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38, 39],
+                vec![41, 42],
+                vec![44, 45],
+                vec![47, 48, 49, 50],
+            ],
         ];
 
         check_btree_correctness(&map, expected_keys);
@@ -448,9 +469,22 @@ mod tests {
         let mut v = map.remove(&44);
         assert!(v != None && *(v.unwrap()) == (44 + 1).to_string());
         let expected_keys_1 = vec![
-            vec![ vec![15, 31], ],
-            vec![ vec![2, 5, 10], vec![18, 21, 25], vec![35, 40, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![16, 17], vec![19, 20], vec![22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38, 39], vec![41, 42, 43, 45], vec![47, 48, 49, 50], ],
+            vec![vec![15, 31]],
+            vec![vec![2, 5, 10], vec![18, 21, 25], vec![35, 40, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![16, 17],
+                vec![19, 20],
+                vec![22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38, 39],
+                vec![41, 42, 43, 45],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_1);
 
@@ -458,9 +492,21 @@ mod tests {
         v = map.remove(&19);
         assert!(v != None && *(v.unwrap()) == (19 + 1).to_string());
         let expected_keys_2 = vec![
-            vec![ vec![15, 31], ],
-            vec![ vec![2, 5, 10], vec![21, 25], vec![35, 40, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![16, 17, 18, 20], vec![22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38, 39], vec![41, 42, 43, 45], vec![47, 48, 49, 50], ],
+            vec![vec![15, 31]],
+            vec![vec![2, 5, 10], vec![21, 25], vec![35, 40, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![16, 17, 18, 20],
+                vec![22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38, 39],
+                vec![41, 42, 43, 45],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_2);
 
@@ -472,9 +518,21 @@ mod tests {
         v = map.remove(&45);
         assert!(v != None && *(v.unwrap()) == (45 + 1).to_string());
         let expected_keys_3 = vec![
-            vec![ vec![15, 31], ],
-            vec![ vec![2, 5, 10], vec![21, 25], vec![35, 39, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![16, 17, 18, 20], vec![22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38], vec![40, 41], vec![47, 48, 49, 50], ],
+            vec![vec![15, 31]],
+            vec![vec![2, 5, 10], vec![21, 25], vec![35, 39, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![16, 17, 18, 20],
+                vec![22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38],
+                vec![40, 41],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_3);
 
@@ -486,9 +544,20 @@ mod tests {
         v = map.remove(&16);
         assert!(v != None && *(v.unwrap()) == (16 + 1).to_string());
         let expected_keys_4 = vec![
-            vec![ vec![31], ],
-            vec![ vec![2, 5, 10, 15, 25], vec![35, 39, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![17, 21, 22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38], vec![40, 41], vec![47, 48, 49, 50], ],
+            vec![vec![31]],
+            vec![vec![2, 5, 10, 15, 25], vec![35, 39, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![17, 21, 22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38],
+                vec![40, 41],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_4);
 
@@ -497,9 +566,19 @@ mod tests {
         v = map.remove(&39);
         assert!(v != None && *(v.unwrap()) == (39 + 1).to_string());
         let expected_keys_5 = vec![
-            vec![ vec![31], ],
-            vec![ vec![2, 5, 10, 15, 25], vec![35, 46], ],
-            vec![ vec![0, 1], vec![3, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![17, 21, 22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38, 40, 41], vec![47, 48, 49, 50], ],
+            vec![vec![31]],
+            vec![vec![2, 5, 10, 15, 25], vec![35, 46]],
+            vec![
+                vec![0, 1],
+                vec![3, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![17, 21, 22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38, 40, 41],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_5);
 
@@ -507,14 +586,22 @@ mod tests {
         v = map.remove(&3);
         assert!(v != None && *(v.unwrap()) == (3 + 1).to_string());
         let expected_keys_6 = vec![
-            vec![ vec![31], ],
-            vec![ vec![5, 10, 15, 25], vec![35, 46], ],
-            vec![ vec![0, 1, 2, 4], vec![6, 7, 8, 9], vec![11, 12, 13, 14], vec![17, 21, 22, 23, 24], vec![26, 27, 28, 29, 30], vec![32, 33, 34], vec![36, 37, 38, 40, 41], vec![47, 48, 49, 50], ],
+            vec![vec![31]],
+            vec![vec![5, 10, 15, 25], vec![35, 46]],
+            vec![
+                vec![0, 1, 2, 4],
+                vec![6, 7, 8, 9],
+                vec![11, 12, 13, 14],
+                vec![17, 21, 22, 23, 24],
+                vec![26, 27, 28, 29, 30],
+                vec![32, 33, 34],
+                vec![36, 37, 38, 40, 41],
+                vec![47, 48, 49, 50],
+            ],
         ];
         check_btree_correctness(&map, expected_keys_6);
         println!("Algorithm test done!");
     }
-
 
     #[test]
     #[cfg(feature = "sanity_test")]
@@ -523,7 +610,10 @@ mod tests {
 
         for j in 0..B * 2 {
             for i in 0..10 {
-                map.insert((i * (B * 2 - 1) + j) as u32, (i * (B * 2 - 1) + j + 1).to_string());
+                map.insert(
+                    (i * (B * 2 - 1) + j) as u32,
+                    (i * (B * 2 - 1) + j + 1).to_string(),
+                );
             }
         }
 
@@ -548,12 +638,15 @@ mod tests {
     #[cfg(feature = "stress_test")]
     fn stress_test() {
         // Use fixed pseudo sequnce for repeatable testing
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
-        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        use rand::{Rng, SeedableRng};
+        let seed: [u8; 32] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ];
         let mut rng = StdRng::from_seed(seed);
 
-        let mut max_elements:usize = 0;
+        let mut max_elements: usize = 0;
         for i in 0..6 {
             max_elements += (2 * B).pow(i) * (2 * B + 1);
         }
@@ -601,16 +694,18 @@ mod tests {
         println!("Stress test done!");
     }
 
-
     #[cfg(feature = "stress_test")]
     fn benchmark_test() {
         // Use fixed pseudo sequnce for repeatable testing
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
-        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        use rand::{Rng, SeedableRng};
+        let seed: [u8; 32] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ];
         let mut rng = StdRng::from_seed(seed);
 
-        let mut max_elements:usize = 0;
+        let mut max_elements: usize = 0;
         for i in 0..7 {
             max_elements += (2 * B).pow(i) * (2 * B + 1);
         }
@@ -642,7 +737,7 @@ mod tests {
         }
     }
 
-    fn std_check_btree_sanity(map: &std::collections::BTreeMap::<u32, String>) -> Vec<u32> {
+    fn std_check_btree_sanity(map: &std::collections::BTreeMap<u32, String>) -> Vec<u32> {
         let mut ret = Vec::<u32>::new();
         let mut prev_k = None;
         for (k, v) in map.iter() {
@@ -654,7 +749,7 @@ mod tests {
                 prev_k = Some(k);
             }
             ret.push(*k);
-        };
+        }
         ret
     }
 
@@ -662,12 +757,15 @@ mod tests {
     fn std_benchmark() {
         use std::collections::BTreeMap;
         // Use fixed pseudo sequnce for repeatable testing
-        use rand::{Rng, SeedableRng};
         use rand::rngs::StdRng;
-        let seed: [u8; 32] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+        use rand::{Rng, SeedableRng};
+        let seed: [u8; 32] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ];
         let mut rng = StdRng::from_seed(seed);
 
-        let mut max_elements:usize = 0;
+        let mut max_elements: usize = 0;
         for i in 0..7 {
             max_elements += (2 * B).pow(i) * (2 * B + 1);
         }
@@ -699,16 +797,21 @@ mod tests {
         }
     }
 
-
     #[test]
     #[cfg(feature = "stress_test")]
     fn benchmark() {
         use std::time::Instant;
         let this_impl = Instant::now();
         benchmark_test();
-        println!("Elapsed time for this B-Tree Map implementation: {:.2?}", this_impl.elapsed());
+        println!(
+            "Elapsed time for this B-Tree Map implementation: {:.2?}",
+            this_impl.elapsed()
+        );
         let std = Instant::now();
         std_benchmark();
-        println!("Elapsed time for the std B-Tree Map implementation: {:.2?}", std.elapsed());
+        println!(
+            "Elapsed time for the std B-Tree Map implementation: {:.2?}",
+            std.elapsed()
+        );
     }
 }

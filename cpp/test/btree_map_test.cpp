@@ -190,23 +190,22 @@ static void check_btree_sanity(
 }
 
 static int my_pow(size_t x, unsigned int p) {
-    if (p == 0) return 1;
-    if (p == 1) return x;
+  if (p == 0) return 1;
+  if (p == 1) return x;
 
-    int tmp = my_pow(x, p/2);
-    if (p % 2 == 0) {
-        return tmp * tmp;
-    }
-    else {
-        return x * tmp * tmp;
-    }
+  int tmp = my_pow(x, p / 2);
+  if (p % 2 == 0) {
+    return tmp * tmp;
+  } else {
+    return x * tmp * tmp;
+  }
 }
 
 static void stress_tests() {
   // Max capacity for a 3 layer B-Tree with B factor set to 32 is 262,143
   size_t max_elements = 0;
   for (auto i = 0; i < 7; i++) {
-      max_elements += my_pow(2 * B_FACTOR, i) * (2 * B_FACTOR + 1);
+    max_elements += my_pow(2 * B_FACTOR, i) * (2 * B_FACTOR + 1);
   }
 
   std::cout << "stress_tests max_elements " << max_elements << std::endl;

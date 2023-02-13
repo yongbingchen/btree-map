@@ -145,11 +145,11 @@ struct Node {
   }
 
   std::unique_ptr<Node> remove_child(const size_t index) {
-      auto ret = std::move(children[index]);
-      for (auto i = index; i < 2 * B; i++) {
-          children[i] = std::move(children[i + 1]);
-      }
-      return ret;
+    auto ret = std::move(children[index]);
+    for (auto i = index; i < 2 * B; i++) {
+      children[i] = std::move(children[i + 1]);
+    }
+    return ret;
   }
 
   // Remove the element at index, return the key/value pair of this element
