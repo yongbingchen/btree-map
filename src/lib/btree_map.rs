@@ -152,7 +152,7 @@ where
                         // See https://users.rust-lang.org/t/how-to-return-reference-to-value-in-rc-or-refcell/76729/18
                         // for more detailed explaination.
                         Some(unsafe { &*(ret as *const V as *const V) })
-                    }
+                    };
                 }
                 SearchResult::GoDown(value_ref) => {
                     return Some(unsafe { &*(value_ref as *const V as *const V) })
@@ -186,6 +186,22 @@ where
         K: Borrow<Q> + Ord,
         Q: Ord,
     {
+        if self.root.is_some() {
+            let root = RefCell::borrow(&**self.root.as_ref().unwrap());
+            let result = root.search(key);
+            match result {
+                SearchResult::NotFound => return None,
+                SearchResult::Found(index) => {
+                    return {
+                        let ret = &root.values[index];
+                        Some(unsafe { &mut *(ret as *const V as *mut V) })
+                    }
+                }
+                SearchResult::GoDown(value_ref) => {
+                    return Some(unsafe { &mut *(value_ref as *const V as *mut V) })
+                }
+            };
+        }
         None
     }
 
@@ -269,7 +285,7 @@ where
         K: Borrow<Q> + Ord,
         Q: Ord,
     {
-        if self.root.is_none() {
+        if self.root.is_none() || self.length == 0 {
             return None;
         }
         let root = (*self.root.as_ref().unwrap()).clone();
@@ -344,7 +360,19 @@ where
     /// }
     /// ```
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        Default::default()
+        if self.root.is_some() {
+            let root = (*self.root.as_ref().unwrap()).clone();
+            IterMut {
+                current: Some(root),
+                parent: None,
+                current_idx: 0,
+                parent_idx: 0,
+                return_from_child: [false; B * 2 + 1],
+                marker: PhantomData,
+            }
+        } else {
+            Default::default()
+        }
     }
 
     #[cfg(test)]
@@ -374,8 +402,10 @@ impl<'a, K: Default + Ord, V: Default> IntoIterator for &'a mut BTreeMap<K, V> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(feature = "sanity_test", feature = "stress_test"))]
     use super::*;
 
+    #[cfg(feature = "sanity_test")]
     fn check_btree_correctness(map: &BTreeMap<u32, String>, expected_keys: Vec<Vec<Vec<u32>>>) {
         let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
@@ -392,6 +422,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "sanity_test", feature = "stress_test"))]
     fn print_btree(map: &BTreeMap<u32, String>) {
         let mut result: Vec<Vec<Vec<(u32, String)>>> = Default::default();
         map.bfs(&mut result);
@@ -409,6 +440,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "stress_test")]
     fn check_btree_sanity(map: &BTreeMap<u32, String>) -> Vec<u32> {
         let mut ret = Vec::<u32>::new();
         let mut prev_k = None;
@@ -683,7 +715,7 @@ mod tests {
             let e = map.get(&k);
             assert!(*e.unwrap() == (k + 1).to_string());
             let v = map.remove(&k);
-            let now = check_btree_sanity(&map);
+            check_btree_sanity(&map);
             assert!(*v.unwrap() == (k + 1).to_string());
             total_elements -= 1;
         }
@@ -720,7 +752,7 @@ mod tests {
                 if key % 4 == 0 {
                     let erase = rng.gen::<u32>();
                     if map.get(&erase).is_some() {
-                        let v = map.remove(&erase);
+                        map.remove(&erase);
                         total_elements -= 1;
                     }
                 }
@@ -731,12 +763,13 @@ mod tests {
         while preorder.len() != 0 {
             let i = rng.gen::<usize>() % preorder.len();
             let k = preorder.remove(i);
-            let e = map.get(&k);
-            let v = map.remove(&k);
+            map.get(&k);
+            map.remove(&k);
             total_elements -= 1;
         }
     }
 
+    #[cfg(feature = "stress_test")]
     fn std_check_btree_sanity(map: &std::collections::BTreeMap<u32, String>) -> Vec<u32> {
         let mut ret = Vec::<u32>::new();
         let mut prev_k = None;
@@ -780,7 +813,7 @@ mod tests {
                 if key % 4 == 0 {
                     let erase = rng.gen::<u32>();
                     if map.get(&erase).is_some() {
-                        let v = map.remove(&erase);
+                        map.remove(&erase);
                         total_elements -= 1;
                     }
                 }
@@ -791,8 +824,8 @@ mod tests {
         while preorder.len() != 0 {
             let i = rng.gen::<usize>() % preorder.len();
             let k = preorder.remove(i);
-            let e = map.get(&k);
-            let v = map.remove(&k);
+            map.get(&k);
+            map.remove(&k);
             total_elements -= 1;
         }
     }

@@ -180,7 +180,7 @@ where
                 return Some(old_v);
             }
             IndexResult::NotFound => {
-                // key is greater than all self.keys, add it to the last slot
+                // key is greater than all self.keys, erase the last slot
                 return self.do_erase_recursive(key, self.keys.len());
             }
             IndexResult::GoDown(pos) => {
